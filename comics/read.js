@@ -1,8 +1,8 @@
 const fs = require("fs/promises");
 
-const readComic = async () => {
+const readComics = async () => {
   const comics = await fs.readFile("comics.txt");
   return comics;
 };
 
-module.exports = readComic;
+module.exports = readComics;

@@ -1,12 +1,16 @@
 const http = require("http");
-const fs = require("fs/promises");
-const { v4: uuidv4 } = require("uuid");
 
-//IMPORTS COMIC
-const readComic = require("./comics/read");
+//IMPORTS FUNCIONES COMIC
+const readComics = require("./comics/read");
 const createComic = require("./comics/create");
 const updateComic = require("./comics/update");
 const deleteComic = require("./comics/delete");
+
+//IMPORTS FUNCIONES AUTO
+const readAutos = require("./autos/read");
+const createAuto = require("./autos/create");
+const updateAuto = require("./autos/update");
+const deleteAuto = require("./autos/delete");
 
 const server = http.createServer(async (req, res) => {
   const { searchParams, pathname } = new URL(
@@ -14,15 +18,13 @@ const server = http.createServer(async (req, res) => {
     `http://${req.headers.host}`
   );
   const params = new URLSearchParams(searchParams);
-  const comics = await fs.readFile("comics.txt");
-  const autos = await fs.readFile("autos.txt");
 
-  //COMICS
+  // COMICS //
 
   //GET COMICS
   if (pathname === "/comics" && req.method === "GET") {
     try {
-      const comics = await readComic();
+      const comics = await readComics();
       res.setHeader("content-type", "application/json");
       res.write(comics);
     } catch (error) {
@@ -102,18 +104,23 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  //AUTOS
+  // AUTOS //
 
   //GET AUTOS
   if (pathname === "/autos" && req.method === "GET") {
-    res.write(autos);
-    res.end();
+    try {
+      const autos = await readAutos();
+      res.setHeader("content-type", "application/json");
+      res.write(autos);
+    } catch (error) {
+      res.write("Los autos no pudieron ser leídos");
+    } finally {
+      res.end();
+    }
   }
 
   //POST AUTOS
   if (pathname === "/autos" && req.method === "POST") {
-    const autosJson = JSON.parse(autos);
-    let id = uuidv4();
     let nuevoAuto;
 
     req.on("data", (data) => {
@@ -121,18 +128,22 @@ const server = http.createServer(async (req, res) => {
     });
 
     req.on("end", async () => {
-      autosJson[id] = nuevoAuto;
-
-      await fs.writeFile("autos.txt", JSON.stringify(autosJson, null, 2));
-      res.write("Automóvil agregado exitosamente");
-      res.end();
+      try {
+        const autoAgregado = await createAuto(nuevoAuto);
+        res.write(
+          `El auto '${autoAgregado.marca} ${autoAgregado.modelo}' se ha añadido exitosamente`
+        );
+      } catch (error) {
+        res.write(`Lo sentimos! Hubo un error al crear el vehículo`);
+      } finally {
+        res.end();
+      }
     });
   }
 
   //PUT AUTOS
   if (pathname === "/autos" && req.method === "PUT") {
     const id = params.get("id");
-    const autosJson = JSON.parse(autos);
     let datosNuevos;
 
     req.on("data", (datos) => {
@@ -140,26 +151,46 @@ const server = http.createServer(async (req, res) => {
     });
 
     req.on("end", async () => {
-      const autoOriginal = autosJson[id];
-      const autoActualizado = { ...autoOriginal, ...datosNuevos };
-      autosJson[id] = autoActualizado;
-      await fs.writeFile("autos.txt", JSON.stringify(autosJson, null, 2));
-      res.write("Los datos del vehículo han sido modificados exitosamente");
-      res.end();
+      try {
+        const autoActualizado = await updateAuto(id, datosNuevos);
+
+        if (!autoActualizado)
+          throw new Error("El vehículo que intenta actualizar no existe");
+
+        res.write(
+          `Los datos del auto '${autoActualizado.marca} ${autoActualizado.modelo}' han sido modificados exitosamente`
+        );
+      } catch (error) {
+        res.write(
+          error.message ||
+            "Lo sentimos! No se ha podido realizar la modificación"
+        );
+      } finally {
+        res.end();
+      }
     });
   }
 
   //DELETE AUTOS
   if (req.url.startsWith("/autos") && req.method === "DELETE") {
     const id = params.get("id");
-    const autosJson = JSON.parse(autos);
 
-    delete autosJson[id];
+    try {
+      const autoEliminado = await deleteAuto(id);
 
-    await fs.writeFile("autos.txt", JSON.stringify(autosJson, null, 2));
+      if (!autoEliminado)
+        throw new Error("El vehículo que intenta eliminar no existe");
 
-    res.write(`El vehíhulo ID ${id} ha sido eliminado exitosamente`);
-    res.end();
+      res.write(
+        `El auto '${autoEliminado.marca} ${autoEliminado.modelo}' ha sido eliminado exitosamente`
+      );
+    } catch (error) {
+      res.write(
+        error.message || "Lo sentimos! No se ha podido eliminar el auto"
+      );
+    } finally {
+      res.end();
+    }
   }
 });
 
